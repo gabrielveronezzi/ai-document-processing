@@ -39,6 +39,14 @@ services:
       document-ai:
         condition: service_started
 
+  web:
+    build:
+      context: ./frontend/web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
   document_uploads:
