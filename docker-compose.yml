@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: document_processing
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d document_processing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  document-ai:
+    build:
+      context: ./services/document-ai
+    ports:
+      - "8000:8000"
+
+  api:
+    build:
+      context: ./backend/api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Database: Host=db;Port=5432;Database=document_processing;Username=app;Password=app
+      AiService__BaseUrl: http://document-ai:8000
+      Storage__UploadsPath: /app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - document_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      document-ai:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  document_uploads:
