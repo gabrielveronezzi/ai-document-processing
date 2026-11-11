@@ -1,6 +1,7 @@
 # Architecture
 
 ## Context and scope
+
 AI Document Processing is a portfolio project demonstrating solution architecture, API design, AI integration, and full-stack engineering. It is not intended to process confidential or production banking documents.
 
 The first release focuses on one end-to-end use case: upload a PDF, extract selected information, validate a structured response, persist the result, and display it for human review.
@@ -10,13 +11,14 @@ The first release focuses on one end-to-end use case: upload a PDF, extract sele
 ### Web application — `frontend/web`
 - React + TypeScript.
 - Upload experience, processing status, and extracted-data review.
-- Communicates only with the public application API; it does not call the LLM provider directly.
+- Communicates only with the application API; it does not call the LLM provider directly.
 
 ### Application API — `backend/api`
 - ASP.NET Core Web API.
-- Owns document metadata, upload validation, orchestration, persistence, and application-level authorization.
+- Owns document metadata, upload validation, orchestration, and persistence.
 - Defines the contract consumed by the frontend and the AI service.
 - Keeps storage and AI-provider details behind interfaces/adapters.
+- Authentication and authorization are not implemented in the current MVP.
 
 ### AI service — `services/document-ai`
 - Python + FastAPI.
@@ -32,6 +34,7 @@ The first release focuses on one end-to-end use case: upload a PDF, extract sele
 - A storage abstraction can later support S3-compatible or cloud object storage without changing application workflows.
 
 ## Initial processing sequence
+
 1. Frontend submits a multipart PDF upload to the API.
 2. API validates the file, assigns an ID, stores it, and creates a `Processing` document record.
 3. API invokes the AI service with the PDF payload.
@@ -54,15 +57,17 @@ The MVP executes this flow synchronously. A background queue and worker should b
 | Human review | Required in the UI | Extraction is probabilistic and must be reviewed |
 
 ## Security and privacy
+
 - Do not use real customer, employee, employer, banking, or confidential documents.
 - Do not commit secrets; load credentials from environment variables or a secret manager.
 - Enforce file size and content-type checks; do not trust file extensions alone.
 - Treat document text as untrusted input and validate all AI-generated output.
 - Avoid logging raw PDF text, prompts containing sensitive data, or full extracted payloads.
 - The OpenAI provider sends extracted PDF text to the configured OpenAI API account. Review applicable provider data controls before use.
-- Add authentication, authorization, retention controls, malware scanning, and production-grade secret management before deployment.
+- Authentication, authorization, retention controls, malware scanning, and production-grade secret management are not implemented and are required before deployment beyond a trusted local environment.
 
 ## Future evolution
+
 - OCR for scanned PDFs.
 - Background processing with a queue and retry policy.
 - Authentication and role-based authorization.
