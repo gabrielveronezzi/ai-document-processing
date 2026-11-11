@@ -50,3 +50,67 @@ jobs:
           node-version: "22"
       - run: npm install
       - run: npm run build
+
+  integration-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the full stack
+        run: docker compose up -d --build
+      - name: Wait for services
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/health >/dev/null && \
+               curl -fsS http://localhost:8080/health >/dev/null && \
+               curl -fsS http://localhost:3000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs
+          exit 1
+      - name: Create a synthetic invoice and verify the end-to-end flow
+        run: |
+          python -m pip install reportlab
+          python - <<'PY'
+          from reportlab.pdfgen import canvas
+          from reportlab.lib.pagesizes import letter
+
+          path = "sample-invoice.pdf"
+          pdf = canvas.Canvas(path, pagesize=letter)
+          text = pdf.beginText(50, 740)
+          for line in [
+              "Supplier: ACME Supplies Ltd",
+              "Invoice Number: INV-2026-0042",
+              "Issue Date: 11/11/2026",
+              "Total: R$ 1.234,56",
+          ]:
+              text.textLine(line)
+          pdf.drawText(text)
+          pdf.save()
+          PY
+
+          curl --fail --silent --show-error \
+            -F "file=@sample-invoice.pdf;type=application/pdf" \
+            http://localhost:3000/api/documents > response.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          response = json.loads(Path("response.json").read_text())
+          assert response["status"] == "Completed", response
+          extracted = json.loads(response["extractedDataJson"])
+          assert extracted["document_type"] == "invoice", extracted
+          fields = extracted["fields"]
+          assert fields["supplier"] == "ACME Supplies Ltd", fields
+          assert fields["invoice_number"] == "INV-2026-0042", fields
+          assert fields["total"] == "1.234,56", fields
+          assert fields["currency"] == "BRL", fields
+          print("End-to-end upload, PDF extraction, persistence and API response passed.")
+          PY
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
