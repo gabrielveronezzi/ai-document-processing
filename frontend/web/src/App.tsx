@@ -53,7 +53,11 @@ function App() {
       const created = await uploadDocument(file)
       setDocuments((current) => [created, ...current.filter((item) => item.id !== created.id)])
       setSelectedId(created.id)
-      setSuccess('Your document has been processed.')
+      if (created.status === 'Completed') {
+        setSuccess('Your document has been processed.')
+      } else if (created.status === 'Failed') {
+        setError(created.errorMessage || 'Document processing failed.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.')
     } finally {
@@ -67,6 +71,19 @@ function App() {
     try { return JSON.parse(selected.extractedDataJson) as Record<string, unknown> }
     catch { return null }
   }, [selected])
+
+  const extractedFields = useMemo(() => {
+    if (!extracted) return null
+    const fields = extracted.fields
+    if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
+      return fields as Record<string, unknown>
+    }
+    return Object.fromEntries(
+      Object.entries(extracted).filter(([key]) =>
+        !['document_id', 'provider', 'document_type', 'text_length', 'raw_text'].includes(key),
+      ),
+    )
+  }, [extracted])
 
   const completedCount = documents.filter((item) => item.status === 'Completed').length
   const failedCount = documents.filter((item) => item.status === 'Failed').length
@@ -117,7 +134,7 @@ function App() {
               {selected ? <div className="detail-content">
                 <div className="detail-file"><div className="file-icon large"><FileText size={22} /></div><div><strong>{selected.fileName}</strong><span>{formatBytes(selected.fileSize)} · PDF document</span></div></div>
                 <div className="detail-section"><div className="section-title">PROCESSING STATUS</div><span className={`status status-${selected.status.toLowerCase()}`}>{selected.status === 'Completed' ? <CheckCircle2 size={13} /> : selected.status === 'Failed' ? <AlertCircle size={13} /> : <Clock3 size={13} />}{statusLabel[selected.status]}</span>{selected.errorMessage && <p className="error-copy">{selected.errorMessage}</p>}</div>
-                <div className="detail-section"><div className="section-title">EXTRACTED FIELDS</div>{extracted ? <div className="field-list">{Object.entries(extracted).filter(([key]) => key !== 'raw_text').map(([key, value]) => <div className="field-row" key={key}><span>{key.replace(/_/g, ' ')}</span><strong>{value === null || value === undefined || value === '' ? '—' : String(value)}</strong></div>)}</div> : <div className="no-data"><Sparkles size={17} /><span>{selected.status === 'Failed' ? 'No extraction data available.' : selected.status === 'Processing' ? 'Extraction is in progress.' : 'No structured fields were returned.'}</span></div>}</div>
+                <div className="detail-section"><div className="section-title">EXTRACTED FIELDS</div>{extractedFields && Object.keys(extractedFields).length > 0 ? <div className="field-list">{Object.entries(extractedFields).map(([key, value]) => <div className="field-row" key={key}><span>{key.replace(/_/g, ' ')}</span><strong>{value === null || value === undefined || value === '' ? '—' : String(value)}</strong></div>)}</div> : <div className="no-data"><Sparkles size={17} /><span>{selected.status === 'Failed' ? 'No extraction data available.' : selected.status === 'Processing' ? 'Extraction is in progress.' : 'No structured fields were returned.'}</span></div>}</div>
                 <div className="detail-footer"><span>Uploaded</span><strong>{new Date(selected.createdAtUtc).toLocaleString()}</strong></div>
               </div> : <div className="empty-detail"><div className="empty-icon"><FileText size={24} /></div><strong>Select a document</strong><span>Choose a file from the list to inspect its extracted fields.</span></div>}
             </aside>
