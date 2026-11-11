@@ -92,6 +92,7 @@ app.MapPost("/api/documents", async (
     return Results.Created($"/api/documents/{document.Id}", DocumentResponse.From(document));
 })
     .Accepts<IFormFile>("multipart/form-data")
+    .DisableAntiforgery()
     .Produces<DocumentResponse>(StatusCodes.Status201Created)
     .Produces(StatusCodes.Status400BadRequest);
 
