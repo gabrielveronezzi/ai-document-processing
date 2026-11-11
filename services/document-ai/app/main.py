@@ -1,13 +1,15 @@
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from openai import OpenAIError
 from pypdf.errors import PdfReadError
 
-from app.extractor import extract_pdf_text, mock_extract_fields
+from app.extractor import extract_pdf_text
+from app.providers import get_provider
 from app.schemas import ExtractionResult
 
 app = FastAPI(
     title="Document AI Service",
-    version="0.1.0",
-    description="PDF text extraction and structured field extraction for the portfolio MVP.",
+    version="0.2.0",
+    description="PDF text extraction and provider-based structured field extraction.",
 )
 
 
@@ -32,10 +34,21 @@ async def process_document(
     if not text:
         raise HTTPException(status_code=422, detail="No extractable text was found in the PDF.")
 
+    try:
+        provider = get_provider()
+        document_type, fields = provider.extract(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    except (OpenAIError, KeyError, TypeError) as exc:
+        # Avoid returning provider payloads or document text to the caller.
+        raise HTTPException(status_code=502, detail="The configured AI provider could not process this document.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Document extraction failed.") from exc
+
     return ExtractionResult(
         document_id=document_id,
-        provider="mock",
-        document_type="invoice" if any(term in text.lower() for term in ("invoice", "fatura", "nota fiscal")) else "generic",
-        fields=mock_extract_fields(text),
+        provider=provider.name,
+        document_type=document_type,
+        fields=fields,
         text_length=len(text),
     )
